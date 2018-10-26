@@ -1,9 +1,18 @@
+#include <stdbool.h>
+#include <stddef.h>
+#include <stdint.h>
+#include <tice.h>
+
 #include <stdio.h>
 #include <stdlib.h>
+
+#include <keypadc.h>
+
 #define MAX_TERMS 50
 #define MAX_VARIABLES 10
 #define MAX_POLY 10
 #define MAX_EXPANSION 200
+#define MAX_STRING 50
 
 struct term {
     int coefficient;
@@ -13,14 +22,24 @@ struct term {
 
 struct poly {
     struct term *start;
-    int length;
-    int multiplicity;
+    uint8_t length;
+    uint8_t multiplicity;
 };
 
 struct term ONE = {.coefficient = 1, .variables[0] = '\0'};
+const char *numChars = {
+    0,   0,   0,   0,   0,   0,   0,   0,   0,   0,
+    0,  '-',  0,   0,   0,   0,   0,  '-', '3', '6',
+   '9',  0,   0,   0,   0,   0,  '2', '5', '8',  0,
+    0,   0,   0,  '0', '1', '4', '7',  0,   0,   0,
+    0,   0,   0,   0,   0,   0,   0,   0,   0,   0,
+    0,   0,   0,   0,   0,   0
+};
+const char *alphaChars = "\0\0\0\0\0\0\0\0\0\0\0WRMH\0\0\0\0VQLG\0\0\0ZUPKFC\0\0YTOJEB\0\0XSNIDA\0\0\0\0\0\0\0\0";
+uint8_t alpha = 0;
 
-int likeTerms(struct term *a, struct term *b) {
-    for (int i=0; i<MAX_VARIABLES; i++) {
+uint8_t likeTerms(struct term *a, struct term *b) {
+    for (uint8_t i=0; i<MAX_VARIABLES; i++) {
         //check if number of terms is same
         if (a->variables[i]=='\0') {
             if (b->variables[i]=='\0') {break;}
@@ -32,9 +51,9 @@ int likeTerms(struct term *a, struct term *b) {
     }
 
     //loop through variables and find if they match
-    for (int i=0; a->variables[i]!='\0'; i++) {
-        int found = 0;
-        for (int j=0; b->variables[j]!='\0'; j++) {
+    for (uint8_t i=0; a->variables[i]!='\0'; i++) {
+        uint8_t found = 0;
+        for (uint8_t j=0; b->variables[j]!='\0'; j++) {
             if (a->variables[i] == b->variables[j]) {
                 if (!(a->powers[i] == b->powers[j])) { //different exponents
                     return 0;
@@ -50,14 +69,14 @@ int likeTerms(struct term *a, struct term *b) {
     return 1;
 }
 
-int scanPoly(struct term *terms, char *inputStr, int maxTerms) {
+uint8_t scanPoly(struct term *terms, char *inputStr, uint8_t maxTerms) {
     struct term *current = terms;
-    int numTerms = 0;
+    uint8_t numTerms = 0;
     //0 = find coefficient
     //1 = find power of variable
-    int phase = 0;
-    int numVariables = 0;
-    int sign = 1;
+    uint8_t phase = 0;
+    uint8_t numVariables = 0;
+    int8_t sign = 1;
     current->coefficient = 0;
     
     //check for leading negative sign
@@ -67,7 +86,7 @@ int scanPoly(struct term *terms, char *inputStr, int maxTerms) {
     }
 
     for (char *itr = inputStr; *itr != '\0'; itr++ ) {
-        int numVal = *itr - '0';
+        uint8_t numVal = *itr - '0';
 
         if (numVal>=0 && numVal <=9) { //is digit
             if (phase==0) {
@@ -94,7 +113,7 @@ int scanPoly(struct term *terms, char *inputStr, int maxTerms) {
             if (current->coefficient == 0) {
                 current->coefficient = 1;
             }
-            for (int j=0; current->variables[j]!='\0'; j++) {
+            for (uint8_t j=0; current->variables[j]!='\0'; j++) {
                 if (current->powers[j] == 0) {
                     current->powers[j] = 1;
                 }
@@ -104,8 +123,8 @@ int scanPoly(struct term *terms, char *inputStr, int maxTerms) {
             if (*itr == '+') { sign = 1;  }
             else             { sign = -1; }
             //add new term to list or combine if like term exists
-            int foundLikeTerm = 0;
-            for (int i=0; i<numTerms; i++) {
+            uint8_t foundLikeTerm = 0;
+            for (uint8_t i=0; i<numTerms; i++) {
                 if (likeTerms(&terms[i],current)) {
                     terms[i].coefficient += current->coefficient;
                     foundLikeTerm = 1;
@@ -130,7 +149,7 @@ int scanPoly(struct term *terms, char *inputStr, int maxTerms) {
     if (current->coefficient == 0) {
         current->coefficient = 1;
     }
-    for (int j=0; current->variables[j]!='\0'; j++) {
+    for (uint8_t j=0; current->variables[j]!='\0'; j++) {
         if (current->powers[j] == 0) {
             current->powers[j] = 1;
         }
@@ -138,8 +157,8 @@ int scanPoly(struct term *terms, char *inputStr, int maxTerms) {
     current->coefficient *= sign; //set sign
     current->variables[numVariables] = '\0'; //add sentinel
     //add new term to list or combine if like term exists
-    int foundLikeTerm = 0;
-    for (int i=0; i<numTerms; i++) {
+    uint8_t foundLikeTerm = 0;
+    for (uint8_t i=0; i<numTerms; i++) {
         if (likeTerms(&terms[i],current)) {
             terms[i].coefficient += current->coefficient;
             foundLikeTerm = 1;
@@ -158,7 +177,7 @@ struct term multiplyTerms(struct term *a, struct term *b) { //non destructive
     struct term newTerm;
     newTerm.coefficient = a->coefficient;
     //find number of variables of term a and copies variables and powers to new term
-    int numVariables;
+    uint8_t numVariables;
     for (numVariables=0; a->variables[numVariables]!='\0'; numVariables++) {
         newTerm.variables[numVariables] = a->variables[numVariables];
         newTerm.powers[numVariables] = a->powers[numVariables];
@@ -167,9 +186,9 @@ struct term multiplyTerms(struct term *a, struct term *b) { //non destructive
 
     newTerm.coefficient = a->coefficient * b->coefficient; //multiply coefficients
 
-    for (int j=0; b->variables[j]!='\0'; j++) {
-        int found = 0;
-        for (int i=0; newTerm.variables[i]!='\0'; i++) { //find if a has the same variable
+    for (uint8_t j=0; b->variables[j]!='\0'; j++) {
+        uint8_t found = 0;
+        for (uint8_t i=0; newTerm.variables[i]!='\0'; i++) { //find if a has the same variable
             if (newTerm.variables[i] == b->variables[j]) {
                 newTerm.powers[i] += b->powers[j];
                 found = 1;
@@ -193,7 +212,7 @@ struct term multiplyTerms(struct term *a, struct term *b) { //non destructive
     return newTerm;
 }
 
-void expandExpr(struct poly *polynomials, int numPoly, struct term *expandedTerms, int *numExpandedTerms, int polyIndex, int multiplicityCount, struct term *mult) {
+void expandExpr(struct poly *polynomials, uint8_t numPoly, struct term *expandedTerms, uint8_t *numExpandedTerms, uint8_t polyIndex, uint8_t multiplicityCount, struct term *mult) {
     //detecting if reached last polynomial
     if (polyIndex == numPoly) {
         if (*numExpandedTerms > MAX_EXPANSION) { //prevent term list from overflowing
@@ -204,7 +223,7 @@ void expandExpr(struct poly *polynomials, int numPoly, struct term *expandedTerm
         struct term *newTerm = expandedTerms + *numExpandedTerms;
         newTerm->coefficient = mult->coefficient;
         //find number of variables of term a and copy variables and powers to new term
-        int numVariables;
+        uint8_t numVariables;
         for (numVariables=0; mult->variables[numVariables]!='\0'; numVariables++) {
             newTerm->variables[numVariables] = mult->variables[numVariables];
             newTerm->powers[numVariables] = mult->powers[numVariables];
@@ -212,8 +231,8 @@ void expandExpr(struct poly *polynomials, int numPoly, struct term *expandedTerm
         newTerm->variables[numVariables] = '\0';
         
         //add new term to list or combine if like term exists
-        int foundLikeTerm = 0;
-        for (int i=0; i<*numExpandedTerms; i++) {
+        uint8_t foundLikeTerm = 0;
+        for (uint8_t i=0; i<*numExpandedTerms; i++) {
             if (likeTerms(&expandedTerms[i],newTerm)) {
                 expandedTerms[i].coefficient += newTerm->coefficient;
                 foundLikeTerm = 1;
@@ -235,20 +254,35 @@ void expandExpr(struct poly *polynomials, int numPoly, struct term *expandedTerm
     }
 
     //recursively multiply out polynomial
-    for (int i=0; i<currentPoly->length; i++) {
+    for (uint8_t i=0; i<currentPoly->length; i++) {
         struct term newMult = multiplyTerms(mult, currentPoly->start + i);
         expandExpr(polynomials, numPoly, expandedTerms, numExpandedTerms, polyIndex, multiplicityCount, &newMult);
     }
 }
 
 int main() {
+    uint8_t scanning = 1;
+    uint8_t key;
+    uint8_t mults[MAX_POLY];
+    memset(mults, 1, MAX_POLY*sizeof(char));
+    char buffer[MAX_POLY][MAX_STRING];
+    while (scanning) {
+        if (!(key = os_GetCSC())) {continue;}
+
+        if (chars[key] == sk_Alpha) {
+            alpha = 1-alpha;
+        }
+        else if (alpha) {
+        }
+    }
+
     char *inputStr1 = "a+b";
     char *inputStr2 = "a-b";
     char *inputStr3 = "1";
     struct term terms[MAX_TERMS];
     struct poly polynomials[MAX_POLY];
-    int numTerms = 0;
-    int numPoly = 0;
+    uint8_t numTerms = 0;
+    uint8_t numPoly = 0;
     
     polynomials[numPoly].start = terms+numTerms;
     numTerms += ( polynomials[numPoly].length = scanPoly(terms+numTerms, inputStr1, MAX_TERMS-numTerms) );
@@ -266,7 +300,7 @@ int main() {
     numPoly++;
 
     struct term expandedTerms[MAX_EXPANSION];
-    int numExpandedTerms = 0;
+    uint8_t numExpandedTerms = 0;
     expandExpr(polynomials, numPoly, expandedTerms, &numExpandedTerms, 0, 0, &ONE);
 
     /*struct term testTerm;
@@ -279,14 +313,14 @@ int main() {
 
     multiplyTerms(&terms[0], &testTerm);*/
 
-    for (int i=0; i<numTerms; i++) {
+    for (uint8_t i=0; i<numTerms; i++) {
         if (terms[i].coefficient == -1) {
             printf("-");
         }
         else if (terms[i].coefficient != 1) {
             printf("%d", terms[i].coefficient);
         }
-        for (int j=0; terms[i].variables[j] != '\0'; j++) {
+        for (uint8_t j=0; terms[i].variables[j] != '\0'; j++) {
             printf("%c", terms[i].variables[j]);
             if (terms[i].powers[j] != 1) {
                 printf("%d", terms[i].powers[j]);
@@ -296,7 +330,7 @@ int main() {
     }
     printf("\n");
 
-    for (int i=0; i<numExpandedTerms; i++) {
+    for (uint8_t i=0; i<numExpandedTerms; i++) {
         if (expandedTerms[i].coefficient == 0) {
             continue;
         }
@@ -306,7 +340,7 @@ int main() {
         else if (expandedTerms[i].coefficient != 1) {
             printf("%d", expandedTerms[i].coefficient);
         }
-        for (int j=0; expandedTerms[i].variables[j] != '\0'; j++) {
+        for (uint8_t j=0; expandedTerms[i].variables[j] != '\0'; j++) {
             printf("%c", expandedTerms[i].variables[j]);
             if (expandedTerms[i].powers[j] != 1) {
                 printf("%d", expandedTerms[i].powers[j]);

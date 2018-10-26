@@ -7,15 +7,12 @@
 #include <sys/socket.h>
 #include <netdb.h>
 #include <arpa/inet.h>
-#include <netinet/in.h>
 #include <sys/wait.h>
 #include <signal.h>
 
 int bindFirstPossibleAddress(addrinfo *servinfo) {
     int yes = 1;
     int sockfd;
-    sockaddr_storage clientaddr;
-    socklen_t sin_size;
     addrinfo *p;
     for (p = servinfo; p!= NULL; p = p->ai_next) {
         if ( (sockfd = socket(p->ai_family, p->ai_socktype, p->ai_protocol)) == -1) {
@@ -89,7 +86,7 @@ int main() {
     sigemptyset(&sa.sa_mask);
     sa.sa_flags = SA_RESTART;
     if (sigaction(SIGCHLD, &sa, NULL) == -1) {
-        perror("sigaction");
+        perror("sigaction()");
         exit(1);
     }
 

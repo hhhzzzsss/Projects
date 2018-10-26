@@ -262,17 +262,75 @@ void expandExpr(struct poly *polynomials, uint8_t numPoly, struct term *expanded
 
 int main() {
     uint8_t scanning = 1;
-    uint8_t key;
-    uint8_t mults[MAX_POLY];
+    uint8_t key = 0;
+    uint8_t lastKey = 0;
+    char mults[MAX_POLY][2]; //max 2 digit multiplicity
     memset(mults, 1, MAX_POLY*sizeof(char));
-    char buffer[MAX_POLY][MAX_STRING];
+    char buffer[MAX_POLY][MAX_STRING+1];
+    int8_t cursorPos = 0;
+    uint8_t lineNum;
+    char c;
     while (scanning) {
-        if (!(key = os_GetCSC())) {continue;}
-
-        if (chars[key] == sk_Alpha) {
+        lastKey = key;
+        key = os_GetCSC();
+        if (!key || lastKey==key) {continue;} //if no key is pressed or key is not changed, continue
+        
+        c='\0';
+        if (key == sk_Alpha && cursorPos>=0) { //if alpha key is pressed and you aren't entering a multiplicity
             alpha = 1-alpha;
         }
+        else if (key == sk_Enter) { //switch between poly and multiplicity input
+            if (cursorPos>=0) {
+                cursorPos = -2; //max 2 digit multiplicity
+            }
+            else {
+                cursorPos = 0;
+            }
+            alpha = 0;
+        }
+        else if (key == sk_Clear) {
+        }
+        //arrow keys
+        else if (key == sk_Up) {
+            if (lineNum>0) {
+                lineNum--;
+                cursorPos = 0;
+                alpha = 0;
+            }
+        }
+        else if (key == sk_Down) {
+            if (lineNum<MAX_POLY-1) {
+                lineNum++;
+                cursorPos = 0;
+                alpha = 0;
+            }
+        }
+        else if (key == sk_Left) {
+            if (cursorPos > 0 || cursorPos == -1) {
+                cursorPos--;
+                alpha = 0;
+            }
+        }
+        else if (key == sk_Right) {
+            if (buffer[lineNum][cursorPos] && cursorPos < MAX_STRING && cursorPos != -1) {
+                cursorPos++;
+                alpha = 0;
+            }
+        }
         else if (alpha) {
+            c = alphaChars[key];
+        }
+        else {
+            c = numChars[key];
+        }
+        
+        if (cursorPos<MAX_STRING && c) {
+            if (!buffer[lineNum][cursorPos]) { //if at end of string, set next index to be sentinel
+                buffer[lineNum][cursorPos+1] = '\0';
+            }
+            buffer[lineNum][cursorPos] = c;
+            cursorPos++;
+            alpha = 0;
         }
     }
 

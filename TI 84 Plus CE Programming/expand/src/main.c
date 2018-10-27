@@ -62,6 +62,7 @@ void moveCursorLeft() {
 
 void drawLine(uint8_t line, char *polyString, char *multString, uint8_t cursorPos, uint8_t *scroll) {
     int cursorDispPos;
+    char *buffer;
     if (cursorPos>=0) {
         cursorDispPos = cursorPos - *scroll + 1;
         if (cursorDispPos==23) {
@@ -81,7 +82,7 @@ void drawLine(uint8_t line, char *polyString, char *multString, uint8_t cursorPo
             cursorDispPos=25;
         }
     }
-    char buffer[27];
+    buffer = (char *)malloc(27*sizeof(char));
     memset(buffer, ' ', 26);
     buffer[26] = '\0';
     buffer[0] = '(';
@@ -89,18 +90,27 @@ void drawLine(uint8_t line, char *polyString, char *multString, uint8_t cursorPo
     strncpy(buffer+1, polyString+*scroll, 22);
     strncpy(buffer+24, multString, 2);
     os_SetCursorPos(line, 0);
-    os_PutStrFull(text);
+    os_PutStrFull(buffer);
     os_SetCursorPos(line, cursorDispPos);
 }
 
 void dispString(char *string) {
+    char *buffer;
+    int offset;
+    uint8_t atBottom;
+    int i;
+    
+    uint8_t key;
+    uint8_t lastKey;
+    uint8_t changed;
+
     os_DisableCursor();
     
-    int offset = 0;
-    char buffer[261];
+    buffer = (char *)malloc(261*sizeof(char));
     buffer[260]='\0';
-    int atBottom = 0;
-    for (int i=0; i<260; i++) {
+    offset = 0;
+    atBottom = 0;
+    for (i=0; i<260; i++) {
         char c = string[26*offset+i];
         buffer[i] = c;
         if (!c) {
@@ -111,15 +121,14 @@ void dispString(char *string) {
     os_SetCursorPos(0,0);
     os_PutStrFull(buffer);
     
-    uint8_t key = 0;
-    uint8_t lastKey = 0;
-    uint8_t changed;
+    key = 0;
+    lastKey = 0;
     while (1) {
         lastKey = key;
         key = os_GetCSC();
         if (!key || lastKey==key) {continue;} //if no key is pressed or key is not changed, continue
         
-        uint8_t changed = 0;
+        changed = 0;
         if (key == sk_Up) { //switch between poly and multiplicity input
             if (offset>0) {
                 offset--;
@@ -135,7 +144,7 @@ void dispString(char *string) {
         }
 
         if (changed) {
-            for (int i=0; i<260; i++) {
+            for (i=0; i<260; i++) {
                 char c = string[26*offset+i];
                 buffer[i] = c;
                 if (!c) {
@@ -150,7 +159,9 @@ void dispString(char *string) {
 }
 
 uint8_t likeTerms(struct term *a, struct term *b) {
-    for (uint8_t i=0; i<MAX_VARIABLES; i++) {
+    uint8_t i;
+    uint8_t j;
+    for (i=0; i<MAX_VARIABLES; i++) {
         //check if number of terms is same
         if (a->variables[i]=='\0') {
             if (b->variables[i]=='\0') {break;}
@@ -162,9 +173,9 @@ uint8_t likeTerms(struct term *a, struct term *b) {
     }
 
     //loop through variables and find if they match
-    for (uint8_t i=0; a->variables[i]!='\0'; i++) {
+    for (i=0; a->variables[i]!='\0'; i++) {
         uint8_t found = 0;
-        for (uint8_t j=0; b->variables[j]!='\0'; j++) {
+        for (j=0; b->variables[j]!='\0'; j++) {
             if (a->variables[i] == b->variables[j]) {
                 if (!(a->powers[i] == b->powers[j])) { //different exponents
                     return 0;
@@ -188,6 +199,9 @@ uint8_t scanPoly(struct term *terms, char *inputStr, uint8_t maxTerms) {
     uint8_t phase = 0;
     uint8_t numVariables = 0;
     int8_t sign = 1;
+    char *itr;
+    uint8_t i;
+    uint8_t j;
     current->coefficient = 0;
     
     //check for leading negative sign
@@ -196,7 +210,7 @@ uint8_t scanPoly(struct term *terms, char *inputStr, uint8_t maxTerms) {
         inputStr++;
     }
 
-    for (char *itr = inputStr; *itr != '\0'; itr++ ) {
+    for (itr = inputStr; *itr != '\0'; itr++ ) {
         uint8_t numVal = *itr - '0';
 
         if (numVal>=0 && numVal <=9) { //is digit
@@ -220,11 +234,12 @@ uint8_t scanPoly(struct term *terms, char *inputStr, uint8_t maxTerms) {
             if (phase==0) {phase=1;}
         }
         else { //is plus sign or minus sign
+            uint8_t foundLikeTerm;
             //change coefficients and powers of 0 to 1
             if (current->coefficient == 0) {
                 current->coefficient = 1;
             }
-            for (uint8_t j=0; current->variables[j]!='\0'; j++) {
+            for (j=0; current->variables[j]!='\0'; j++) {
                 if (current->powers[j] == 0) {
                     current->powers[j] = 1;
                 }
@@ -234,8 +249,8 @@ uint8_t scanPoly(struct term *terms, char *inputStr, uint8_t maxTerms) {
             if (*itr == '+') { sign = 1;  }
             else             { sign = -1; }
             //add new term to list or combine if like term exists
-            uint8_t foundLikeTerm = 0;
-            for (uint8_t i=0; i<numTerms; i++) {
+            foundLikeTerm = 0;
+            for (i=0; i<numTerms; i++) {
                 if (likeTerms(&terms[i],current)) {
                     terms[i].coefficient += current->coefficient;
                     foundLikeTerm = 1;

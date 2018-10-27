@@ -5,14 +5,17 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include <keypadc.h>
 
 #define MAX_TERMS 50
+#define MAX_STRING 50
 #define MAX_VARIABLES 10
 #define MAX_POLY 10
 #define MAX_EXPANSION 200
-#define MAX_STRING 50
+#define MAX_RESULT 2000
+
 
 struct term {
     int coefficient;
@@ -26,8 +29,7 @@ struct poly {
     uint8_t multiplicity;
 };
 
-struct term ONE = {.coefficient = 1, .variables[0] = '\0'};
-const char *numChars = {
+const char numChars[] = {
     0,   0,   0,   0,   0,   0,   0,   0,   0,   0,
     0,  '-',  0,   0,   0,   0,   0,  '-', '3', '6',
    '9',  0,   0,   0,   0,   0,  '2', '5', '8',  0,
@@ -37,6 +39,115 @@ const char *numChars = {
 };
 const char *alphaChars = "\0\0\0\0\0\0\0\0\0\0\0WRMH\0\0\0\0VQLG\0\0\0ZUPKFC\0\0YTOJEB\0\0XSNIDA\0\0\0\0\0\0\0\0";
 uint8_t alpha = 0;
+
+void delChar(char *ptr) {
+    while (*ptr) {
+        *ptr = *(ptr++);
+    }
+}
+
+void moveCursorRight() {
+    unsigned int row;
+    unsigned int column;
+    os_GetCursorPos(&row, &column);
+    os_SetCursorPos(row, column+1);
+}
+
+void moveCursorLeft() {
+    unsigned int row;
+    unsigned int column;
+    os_GetCursorPos(&row, &column);
+    os_SetCursorPos(row, column-1);
+}
+
+void drawLine(uint8_t line, char *polyString, char *multString, uint8_t cursorPos, uint8_t *scroll) {
+    int cursorDispPos;
+    if (cursorPos>=0) {
+        cursorDispPos = cursorPos - *scroll + 1;
+        if (cursorDispPos==23) {
+            *scroll = cursorPos - 21;
+            cursorDispPos = cursorPos - *scroll + 1;
+        }
+        else if (cursorDispPos<1) {
+            *scroll = cursorPos;
+            cursorDispPos = cursorPos - *scroll + 1;
+        }
+    }
+    else {
+        if (cursorPos==-2) {
+            cursorDispPos=24;
+        }
+        else {
+            cursorDispPos=25;
+        }
+    }
+    char buffer[27];
+    memset(buffer, ' ', 26);
+    buffer[26] = '\0';
+    buffer[0] = '(';
+    buffer[23] = ')';
+    strncpy(buffer+1, polyString+*scroll, 22);
+    strncpy(buffer+24, multString, 2);
+    os_SetCursorPos(line, 0);
+    os_PutStrFull(text);
+    os_SetCursorPos(line, cursorDispPos);
+}
+
+void dispString(char *string) {
+    os_DisableCursor();
+    
+    int offset = 0;
+    char buffer[261];
+    buffer[260]='\0';
+    int atBottom = 0;
+    for (int i=0; i<260; i++) {
+        char c = string[26*offset+i];
+        buffer[i] = c;
+        if (!c) {
+            atBottom = 1;
+            break;
+        }
+    }
+    os_SetCursorPos(0,0);
+    os_PutStrFull(buffer);
+    
+    uint8_t key = 0;
+    uint8_t lastKey = 0;
+    uint8_t changed;
+    while (1) {
+        lastKey = key;
+        key = os_GetCSC();
+        if (!key || lastKey==key) {continue;} //if no key is pressed or key is not changed, continue
+        
+        uint8_t changed = 0;
+        if (key == sk_Up) { //switch between poly and multiplicity input
+            if (offset>0) {
+                offset--;
+                atBottom=0;
+                changed=1;
+            }
+        }
+        else if (key == sk_Down) {
+            if (!atBottom) {
+                offset++;
+                changed=1;
+            }
+        }
+
+        if (changed) {
+            for (int i=0; i<260; i++) {
+                char c = string[26*offset+i];
+                buffer[i] = c;
+                if (!c) {
+                    atBottom = 1;
+                    break;
+                }
+            }
+            os_SetCursorPos(0,0);
+            os_PutStrFull(buffer);
+        }
+    }
+}
 
 uint8_t likeTerms(struct term *a, struct term *b) {
     for (uint8_t i=0; i<MAX_VARIABLES; i++) {
@@ -103,7 +214,7 @@ uint8_t scanPoly(struct term *terms, char *inputStr, uint8_t maxTerms) {
             current->powers[numVariables] = 0;
             numVariables++;
             if (numVariables>MAX_VARIABLES) {
-                printf("term has too many variables\n");
+                //printf("term has too many variables\n");
                 exit(1);
             }
             if (phase==0) {phase=1;}
@@ -135,7 +246,7 @@ uint8_t scanPoly(struct term *terms, char *inputStr, uint8_t maxTerms) {
                 current++;
                 numTerms++;
                 if (numTerms == maxTerms) { //prevent term list from overflowing
-                    printf("too many terms\n");
+                    //printf("too many terms\n");
                     exit(1);
                 }
             }
@@ -173,7 +284,6 @@ uint8_t scanPoly(struct term *terms, char *inputStr, uint8_t maxTerms) {
 }
 
 struct term multiplyTerms(struct term *a, struct term *b) { //non destructive
-    
     struct term newTerm;
     newTerm.coefficient = a->coefficient;
     //find number of variables of term a and copies variables and powers to new term
@@ -197,7 +307,7 @@ struct term multiplyTerms(struct term *a, struct term *b) { //non destructive
         }
         if (!found) { //add new variable to a;
             if (numVariables>=MAX_VARIABLES) {
-                printf("Too many variables");
+                //printf("Too many variables");
                 exit(1);
             }
             newTerm.variables[numVariables] = b->variables[j];
@@ -216,7 +326,7 @@ void expandExpr(struct poly *polynomials, uint8_t numPoly, struct term *expanded
     //detecting if reached last polynomial
     if (polyIndex == numPoly) {
         if (*numExpandedTerms > MAX_EXPANSION) { //prevent term list from overflowing
-            printf("too many terms\n");
+            //printf("too many terms\n");
             exit(1);
         }
 
@@ -261,21 +371,29 @@ void expandExpr(struct poly *polynomials, uint8_t numPoly, struct term *expanded
 }
 
 int main() {
-    uint8_t scanning = 1;
+    os_ClrHome();
+    os_EnableCursor();
+
+    char mults[MAX_POLY][3]; //max 2 digit multiplicity, one extra for sentinel
+    char buffer[MAX_POLY][MAX_STRING+1]; //buffer for string input
+    for (int i=0; i<MAX_POLY; i++) {
+        mults[i][0] = '\0';
+        buffer[i][0] = '\0';
+    }
+
     uint8_t key = 0;
     uint8_t lastKey = 0;
-    char mults[MAX_POLY][2]; //max 2 digit multiplicity
-    memset(mults, 1, MAX_POLY*sizeof(char));
-    char buffer[MAX_POLY][MAX_STRING+1];
     int8_t cursorPos = 0;
-    uint8_t lineNum;
+    uint8_t scroll = 0;
+    uint8_t lineNum = 0;
     char c;
-    while (scanning) {
+    drawLine(lineNum, buffer[lineNum], mults[lineNum], cursorPos, &scroll);
+    while (1) {
         lastKey = key;
         key = os_GetCSC();
         if (!key || lastKey==key) {continue;} //if no key is pressed or key is not changed, continue
         
-        c='\0';
+        c='\0'; //reset character, and if it isn't set no character is entered (like if the clear button is pressed)
         if (key == sk_Alpha && cursorPos>=0) { //if alpha key is pressed and you aren't entering a multiplicity
             alpha = 1-alpha;
         }
@@ -285,35 +403,68 @@ int main() {
             }
             else {
                 cursorPos = 0;
+                if (lineNum<MAX_POLY-1) {
+                    lineNum++;
+                }
             }
             alpha = 0;
         }
         else if (key == sk_Clear) {
+            if (cursorPos>=0) {
+                cursorPos=0;
+                buffer[lineNum][0] = "\0";
+            }
+            else {
+                cursorPos = -2;
+                mults[lineNum][0] = "\0";
+            }
+            drawLine(lineNum, buffer[lineNum], mults[lineNum], cursorPos, &scroll);
+        }
+        else if (key == sk_Del) {
+            if (cursorPos>=0) {
+                delChar(&buffer[lineNum][cursorPos]); //delChar does nothing if value at the pointer is '\0'
+            }
+            else {
+                delChar(&mults[lineNum][cursorPos+2]);
+            }
+            drawLine(lineNum, buffer[lineNum], mults[lineNum], cursorPos, &scroll);
+        }
+        else if (key == sk_Graph) {
+            break;
+        }
+        else if (key == sk_Power) {
+            exit(1);
         }
         //arrow keys
         else if (key == sk_Up) {
             if (lineNum>0) {
-                lineNum--;
                 cursorPos = 0;
+                drawLine(lineNum, buffer[lineNum], mults[lineNum], cursorPos, &scroll);
+                lineNum--;
+                os_SetCursorPos(lineNum, 1);
                 alpha = 0;
             }
         }
         else if (key == sk_Down) {
             if (lineNum<MAX_POLY-1) {
-                lineNum++;
                 cursorPos = 0;
+                drawLine(lineNum, buffer[lineNum], mults[lineNum], cursorPos, &scroll);
+                lineNum++;
+                os_SetCursorPos(lineNum, 1);
                 alpha = 0;
             }
         }
         else if (key == sk_Left) {
             if (cursorPos > 0 || cursorPos == -1) {
                 cursorPos--;
+                moveCursorLeft();
                 alpha = 0;
             }
         }
         else if (key == sk_Right) {
             if (buffer[lineNum][cursorPos] && cursorPos < MAX_STRING && cursorPos != -1) {
                 cursorPos++;
+                moveCursorRight();
                 alpha = 0;
             }
         }
@@ -324,86 +475,76 @@ int main() {
             c = numChars[key];
         }
         
-        if (cursorPos<MAX_STRING && c) {
-            if (!buffer[lineNum][cursorPos]) { //if at end of string, set next index to be sentinel
-                buffer[lineNum][cursorPos+1] = '\0';
+        if (c) { //if there's a character
+            if (cursorPos<MAX_STRING && cursorPos>=0) { //if not at max length and in poly input
+                if (!buffer[lineNum][cursorPos]) { //if at end of string, set next index to be sentinel
+                    buffer[lineNum][cursorPos+1] = '\0';
+                }
+                buffer[lineNum][cursorPos] = c;
+                cursorPos++;
+                alpha = 0;
             }
-            buffer[lineNum][cursorPos] = c;
-            cursorPos++;
-            alpha = 0;
+            else if (cursorPos<0 && cursorPos != -1) { //if not at max length and in multiplicity input
+                if (!mults[lineNum][cursorPos+2]) { //if at end of string, set next index to be sentinel
+                    mults[lineNum][cursorPos+3] = 1;
+                }
+                mults[lineNum][cursorPos] = c;
+                cursorPos++;
+            }
+            drawLine(lineNum, buffer[lineNum], mults[lineNum], cursorPos, &scroll);
         }
     }
+    
+    struct term ONE;
+    ONE.coefficient = 1;
+    ONE.variables[0] = '\0'
 
-    char *inputStr1 = "a+b";
-    char *inputStr2 = "a-b";
-    char *inputStr3 = "1";
     struct term terms[MAX_TERMS];
     struct poly polynomials[MAX_POLY];
     uint8_t numTerms = 0;
     uint8_t numPoly = 0;
-    
-    polynomials[numPoly].start = terms+numTerms;
-    numTerms += ( polynomials[numPoly].length = scanPoly(terms+numTerms, inputStr1, MAX_TERMS-numTerms) );
-    polynomials[numPoly].multiplicity = 1;
-    numPoly++;
-
-    polynomials[numPoly].start = terms+numTerms;
-    numTerms += ( polynomials[numPoly].length = scanPoly(terms+numTerms, inputStr2, MAX_TERMS-numTerms) );
-    polynomials[numPoly].multiplicity = 1;
-    numPoly++;
-
-    polynomials[numPoly].start = terms+numTerms;
-    numTerms += ( polynomials[numPoly].length = scanPoly(terms+numTerms, inputStr3, MAX_TERMS-numTerms) );
-    polynomials[numPoly].multiplicity = 1;
-    numPoly++;
+   
+    for (int i=0; i<MAX_POLY; i++) {
+        polynomials[numPoly].start = terms+numTerms;
+        numTerms += ( polynomials[numPoly].length = scanPoly(terms+numTerms, buffer[i], MAX_TERMS-numTerms) );
+        if (mults[i][0]=='\0') {
+            polynomials[numPoly].multiplicity = 1;
+        }
+        else if (mults[i][1]=='\0') {
+            polynomials[numPoly].multiplicity = mults[i][0]-'0';
+        }
+        else {
+            polynomials[numPoly].multiplicity = (mults[i][0]-'0')*10 + (mults[i][1]-'0');
+        }
+        numPoly++;
+    }
 
     struct term expandedTerms[MAX_EXPANSION];
     uint8_t numExpandedTerms = 0;
     expandExpr(polynomials, numPoly, expandedTerms, &numExpandedTerms, 0, 0, &ONE);
-
-    /*struct term testTerm;
-    testTerm.coefficient = 2;
-    testTerm.variables[0] = 'a';
-    testTerm.variables[1] = 'b';
-    testTerm.variables[2] = '\0';
-    testTerm.powers[0] = 1;
-    testTerm.powers[1] = 2;
-
-    multiplyTerms(&terms[0], &testTerm);*/
-
-    for (uint8_t i=0; i<numTerms; i++) {
-        if (terms[i].coefficient == -1) {
-            printf("-");
-        }
-        else if (terms[i].coefficient != 1) {
-            printf("%d", terms[i].coefficient);
-        }
-        for (uint8_t j=0; terms[i].variables[j] != '\0'; j++) {
-            printf("%c", terms[i].variables[j]);
-            if (terms[i].powers[j] != 1) {
-                printf("%d", terms[i].powers[j]);
-            }
-        }
-        printf("\n");
-    }
-    printf("\n");
-
+    
+    char result[MAX_RESULT];
+    int scanPos = 0;
     for (uint8_t i=0; i<numExpandedTerms; i++) {
         if (expandedTerms[i].coefficient == 0) {
             continue;
         }
         else if (expandedTerms[i].coefficient == -1) {
-            printf("-");
+            scanPos += sprintf(result+scanPos,"-");
         }
         else if (expandedTerms[i].coefficient != 1) {
-            printf("%d", expandedTerms[i].coefficient);
+            scanPos += sprintf(result+scanPos, "%d", expandedTerms[i].coefficient);
         }
         for (uint8_t j=0; expandedTerms[i].variables[j] != '\0'; j++) {
-            printf("%c", expandedTerms[i].variables[j]);
+            scanPos += sprintf(result+scanPos, "%c", expandedTerms[i].variables[j]);
             if (expandedTerms[i].powers[j] != 1) {
-                printf("%d", expandedTerms[i].powers[j]);
+                scanPos += sprintf(result+scanPos, "%d", expandedTerms[i].powers[j]);
             }
         }
-        printf("\n");
+        if (scanPos > MAX_RESULT-50) { //approaching buffer limit
+            //printf("result too long\n");
+            exit(1);
+        }
+        //printf("\n");
     }
 }

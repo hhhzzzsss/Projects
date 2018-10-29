@@ -549,7 +549,7 @@ int main() {
     }
     
     ONE.coefficient = 1;
-    ONE.variables[0] = '\0'
+    ONE.variables[0] = '\0';
 
     terms = (struct term *)malloc(MAX_TERMS*sizeof(struct term));
     polynomials = (struct poly *)malloc(MAX_POLY*sizeof(struct poly));
@@ -600,4 +600,5 @@ int main() {
         //printf("\n");
     }
     dispString(result);
+    return 0;
 }

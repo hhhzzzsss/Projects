@@ -42,7 +42,8 @@ uint8_t alpha = 0;
 
 void delChar(char *ptr) {
     while (*ptr) {
-        *ptr = *(ptr++);
+        *ptr = *(ptr+1);
+        ptr++;
     }
 }
 
@@ -142,6 +143,9 @@ void dispString(char *string) {
                 changed=1;
             }
         }
+        else if (key == sk_Power) {
+            exit(1);
+        }
 
         if (changed) {
             for (i=0; i<260; i++) {
@@ -200,8 +204,11 @@ uint8_t scanPoly(struct term *terms, char *inputStr, uint8_t maxTerms) {
     uint8_t numVariables = 0;
     int8_t sign = 1;
     char *itr;
+    uint8_t numVal;
     uint8_t i;
     uint8_t j;
+    uint8_t foundLikeTerm;
+
     current->coefficient = 0;
     
     //check for leading negative sign
@@ -211,7 +218,7 @@ uint8_t scanPoly(struct term *terms, char *inputStr, uint8_t maxTerms) {
     }
 
     for (itr = inputStr; *itr != '\0'; itr++ ) {
-        uint8_t numVal = *itr - '0';
+        numVal = *itr - '0';
 
         if (numVal>=0 && numVal <=9) { //is digit
             if (phase==0) {
@@ -234,7 +241,6 @@ uint8_t scanPoly(struct term *terms, char *inputStr, uint8_t maxTerms) {
             if (phase==0) {phase=1;}
         }
         else { //is plus sign or minus sign
-            uint8_t foundLikeTerm;
             //change coefficients and powers of 0 to 1
             if (current->coefficient == 0) {
                 current->coefficient = 1;
@@ -275,7 +281,7 @@ uint8_t scanPoly(struct term *terms, char *inputStr, uint8_t maxTerms) {
     if (current->coefficient == 0) {
         current->coefficient = 1;
     }
-    for (uint8_t j=0; current->variables[j]!='\0'; j++) {
+    for (j=0; current->variables[j]!='\0'; j++) {
         if (current->powers[j] == 0) {
             current->powers[j] = 1;
         }
@@ -283,8 +289,8 @@ uint8_t scanPoly(struct term *terms, char *inputStr, uint8_t maxTerms) {
     current->coefficient *= sign; //set sign
     current->variables[numVariables] = '\0'; //add sentinel
     //add new term to list or combine if like term exists
-    uint8_t foundLikeTerm = 0;
-    for (uint8_t i=0; i<numTerms; i++) {
+    foundLikeTerm = 0;
+    for (i=0; i<numTerms; i++) {
         if (likeTerms(&terms[i],current)) {
             terms[i].coefficient += current->coefficient;
             foundLikeTerm = 1;
@@ -300,9 +306,11 @@ uint8_t scanPoly(struct term *terms, char *inputStr, uint8_t maxTerms) {
 
 struct term multiplyTerms(struct term *a, struct term *b) { //non destructive
     struct term newTerm;
+    uint8_t i;
+    uint8_t j;
+    uint8_t numVariables;
     newTerm.coefficient = a->coefficient;
     //find number of variables of term a and copies variables and powers to new term
-    uint8_t numVariables;
     for (numVariables=0; a->variables[numVariables]!='\0'; numVariables++) {
         newTerm.variables[numVariables] = a->variables[numVariables];
         newTerm.powers[numVariables] = a->powers[numVariables];
@@ -311,9 +319,9 @@ struct term multiplyTerms(struct term *a, struct term *b) { //non destructive
 
     newTerm.coefficient = a->coefficient * b->coefficient; //multiply coefficients
 
-    for (uint8_t j=0; b->variables[j]!='\0'; j++) {
+    for (j=0; b->variables[j]!='\0'; j++) {
         uint8_t found = 0;
-        for (uint8_t i=0; newTerm.variables[i]!='\0'; i++) { //find if a has the same variable
+        for (i=0; newTerm.variables[i]!='\0'; i++) { //find if a has the same variable
             if (newTerm.variables[i] == b->variables[j]) {
                 newTerm.powers[i] += b->powers[j];
                 found = 1;
@@ -338,17 +346,22 @@ struct term multiplyTerms(struct term *a, struct term *b) { //non destructive
 }
 
 void expandExpr(struct poly *polynomials, uint8_t numPoly, struct term *expandedTerms, uint8_t *numExpandedTerms, uint8_t polyIndex, uint8_t multiplicityCount, struct term *mult) {
+    struct poly *currentPoly;
+    uint8_t i;
+
     //detecting if reached last polynomial
     if (polyIndex == numPoly) {
+        struct term *newTerm;
+        uint8_t numVariables;
+        uint8_t foundLikeTerm;
         if (*numExpandedTerms > MAX_EXPANSION) { //prevent term list from overflowing
             //printf("too many terms\n");
             exit(1);
         }
 
-        struct term *newTerm = expandedTerms + *numExpandedTerms;
+        newTerm = expandedTerms + *numExpandedTerms;
         newTerm->coefficient = mult->coefficient;
         //find number of variables of term a and copy variables and powers to new term
-        uint8_t numVariables;
         for (numVariables=0; mult->variables[numVariables]!='\0'; numVariables++) {
             newTerm->variables[numVariables] = mult->variables[numVariables];
             newTerm->powers[numVariables] = mult->powers[numVariables];
@@ -356,8 +369,8 @@ void expandExpr(struct poly *polynomials, uint8_t numPoly, struct term *expanded
         newTerm->variables[numVariables] = '\0';
         
         //add new term to list or combine if like term exists
-        uint8_t foundLikeTerm = 0;
-        for (uint8_t i=0; i<*numExpandedTerms; i++) {
+        foundLikeTerm = 0;
+        for (i=0; i<*numExpandedTerms; i++) {
             if (likeTerms(&expandedTerms[i],newTerm)) {
                 expandedTerms[i].coefficient += newTerm->coefficient;
                 foundLikeTerm = 1;
@@ -372,36 +385,61 @@ void expandExpr(struct poly *polynomials, uint8_t numPoly, struct term *expanded
 
     //prepare for next polynomial
     multiplicityCount++;
-    struct poly *currentPoly = polynomials + polyIndex;
+    currentPoly = polynomials + polyIndex;
     if (multiplicityCount == currentPoly->multiplicity) { //move to next polynomial if multiplicity is satisfied
         polyIndex++;
         multiplicityCount=0;
     }
 
     //recursively multiply out polynomial
-    for (uint8_t i=0; i<currentPoly->length; i++) {
+    for (i=0; i<currentPoly->length; i++) {
         struct term newMult = multiplyTerms(mult, currentPoly->start + i);
         expandExpr(polynomials, numPoly, expandedTerms, numExpandedTerms, polyIndex, multiplicityCount, &newMult);
     }
 }
 
 int main() {
+    uint8_t key;
+    uint8_t lastKey;
+    int8_t cursorPos;
+    uint8_t scroll;
+    uint8_t lineNum;
+    char c;
+
+    uint8_t i;
+    uint8_t j;
+
+    char **mults;
+    char **buffer;
+
+    struct term *terms;
+    struct poly *polynomials;
+    uint8_t numTerms;
+    uint8_t numPoly;
+
+    struct term ONE;
+    struct term *expandedTerms;
+    uint8_t numExpandedTerms;
+    char *result;
+    int scanPos;
+
     os_ClrHome();
     os_EnableCursor();
-
-    char mults[MAX_POLY][3]; //max 2 digit multiplicity, one extra for sentinel
-    char buffer[MAX_POLY][MAX_STRING+1]; //buffer for string input
-    for (int i=0; i<MAX_POLY; i++) {
+    
+    mults = malloc(MAX_POLY*sizeof(char *));
+    buffer = malloc(MAX_POLY*sizeof(char *));
+    for (i=0; i<MAX_POLY; i++) {
+        mults[i] = (char *)malloc(3*sizeof(char)); //max 2 digit multiplicity, one extra for sentinel
+        buffer[i] = (char *)malloc((MAX_STRING+1)*sizeof(char)); //buffer for string input
         mults[i][0] = '\0';
         buffer[i][0] = '\0';
     }
 
-    uint8_t key = 0;
-    uint8_t lastKey = 0;
-    int8_t cursorPos = 0;
-    uint8_t scroll = 0;
-    uint8_t lineNum = 0;
-    char c;
+    key = 0;
+    lastKey = 0;
+    cursorPos = 0;
+    scroll = 0;
+    lineNum = 0;
     drawLine(lineNum, buffer[lineNum], mults[lineNum], cursorPos, &scroll);
     while (1) {
         lastKey = key;
@@ -427,11 +465,11 @@ int main() {
         else if (key == sk_Clear) {
             if (cursorPos>=0) {
                 cursorPos=0;
-                buffer[lineNum][0] = "\0";
+                buffer[lineNum][0] = '\0';
             }
             else {
                 cursorPos = -2;
-                mults[lineNum][0] = "\0";
+                mults[lineNum][0] = '\0';
             }
             drawLine(lineNum, buffer[lineNum], mults[lineNum], cursorPos, &scroll);
         }
@@ -510,16 +548,15 @@ int main() {
         }
     }
     
-    struct term ONE;
     ONE.coefficient = 1;
     ONE.variables[0] = '\0'
 
-    struct term terms[MAX_TERMS];
-    struct poly polynomials[MAX_POLY];
-    uint8_t numTerms = 0;
-    uint8_t numPoly = 0;
+    terms = (struct term *)malloc(MAX_TERMS*sizeof(struct term));
+    polynomials = (struct poly *)malloc(MAX_POLY*sizeof(struct poly));
+    numTerms = 0;
+    numPoly = 0;
    
-    for (int i=0; i<MAX_POLY; i++) {
+    for (i=0; i<MAX_POLY; i++) {
         polynomials[numPoly].start = terms+numTerms;
         numTerms += ( polynomials[numPoly].length = scanPoly(terms+numTerms, buffer[i], MAX_TERMS-numTerms) );
         if (mults[i][0]=='\0') {
@@ -534,13 +571,13 @@ int main() {
         numPoly++;
     }
 
-    struct term expandedTerms[MAX_EXPANSION];
-    uint8_t numExpandedTerms = 0;
+    expandedTerms = (struct term *)malloc(MAX_EXPANSION*sizeof(struct term));
+    numExpandedTerms = 0;
     expandExpr(polynomials, numPoly, expandedTerms, &numExpandedTerms, 0, 0, &ONE);
     
-    char result[MAX_RESULT];
-    int scanPos = 0;
-    for (uint8_t i=0; i<numExpandedTerms; i++) {
+    result = (char *)malloc(MAX_RESULT*sizeof(char));
+    scanPos = 0;
+    for (i=0; i<numExpandedTerms; i++) {
         if (expandedTerms[i].coefficient == 0) {
             continue;
         }
@@ -550,7 +587,7 @@ int main() {
         else if (expandedTerms[i].coefficient != 1) {
             scanPos += sprintf(result+scanPos, "%d", expandedTerms[i].coefficient);
         }
-        for (uint8_t j=0; expandedTerms[i].variables[j] != '\0'; j++) {
+        for (j=0; expandedTerms[i].variables[j] != '\0'; j++) {
             scanPos += sprintf(result+scanPos, "%c", expandedTerms[i].variables[j]);
             if (expandedTerms[i].powers[j] != 1) {
                 scanPos += sprintf(result+scanPos, "%d", expandedTerms[i].powers[j]);
@@ -562,4 +599,5 @@ int main() {
         }
         //printf("\n");
     }
+    dispString(result);
 }

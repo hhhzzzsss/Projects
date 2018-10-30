@@ -8,6 +8,7 @@
 #include <string.h>
 
 #include <keypadc.h>
+#include <debug.h>
 
 #define MAX_TERMS 50
 #define MAX_STRING 50
@@ -62,8 +63,10 @@ void moveCursorLeft() {
 }
 
 void drawLine(uint8_t line, char *polyString, char *multString, uint8_t cursorPos, uint8_t *scroll) {
-    int cursorDispPos;
+    uint8_t cursorDispPos;
     char *buffer;
+    uint8_t i;
+    os_DisableCursor();
     if (cursorPos>=0) {
         cursorDispPos = cursorPos - *scroll + 1;
         if (cursorDispPos==23) {
@@ -84,15 +87,22 @@ void drawLine(uint8_t line, char *polyString, char *multString, uint8_t cursorPo
         }
     }
     buffer = (char *)malloc(27*sizeof(char));
-    memset(buffer, ' ', 26);
+    memset(buffer, '-', 26*sizeof(char));
     buffer[26] = '\0';
     buffer[0] = '(';
     buffer[23] = ')';
-    strncpy(buffer+1, polyString+*scroll, 22);
-    strncpy(buffer+24, multString, 2);
+    /*for (i=0; i<22; i++) {
+        if (polyString[*scroll+i] == '\0') {
+            break;
+        }
+        buffer[i+1] = polyString[*scroll+i];
+    }*/
+    //strncpy(buffer+24, multString, 2);
     os_SetCursorPos(line, 0);
     os_PutStrFull(buffer);
     os_SetCursorPos(line, cursorDispPos);
+    //free(buffer);
+    os_EnableCursor();
 }
 
 void dispString(char *string) {
@@ -422,6 +432,9 @@ int main() {
     uint8_t numExpandedTerms;
     char *result;
     int scanPos;
+    
+    ONE.coefficient = 1;
+    ONE.variables[0] = '\0';
 
     os_ClrHome();
     os_EnableCursor();
@@ -445,7 +458,9 @@ int main() {
         lastKey = key;
         key = os_GetCSC();
         if (!key || lastKey==key) {continue;} //if no key is pressed or key is not changed, continue
-        
+
+        dbg_sprintf(dbgout, "got key\n");
+        dbg_sprintf(dbgout, "cursorPos: %d\n", cursorPos);
         c='\0'; //reset character, and if it isn't set no character is entered (like if the clear button is pressed)
         if (key == sk_Alpha && cursorPos>=0) { //if alpha key is pressed and you aren't entering a multiplicity
             alpha = 1-alpha;
@@ -547,9 +562,6 @@ int main() {
             drawLine(lineNum, buffer[lineNum], mults[lineNum], cursorPos, &scroll);
         }
     }
-    
-    ONE.coefficient = 1;
-    ONE.variables[0] = '\0';
 
     terms = (struct term *)malloc(MAX_TERMS*sizeof(struct term));
     polynomials = (struct poly *)malloc(MAX_POLY*sizeof(struct poly));

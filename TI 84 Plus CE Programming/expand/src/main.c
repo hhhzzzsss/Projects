@@ -91,22 +91,21 @@ void drawLine(uint8_t line, char *polyString, char *multString, uint8_t cursorPo
     buffer[26] = '\0';
     buffer[0] = '(';
     buffer[23] = ')';
-    /*for (i=0; i<22; i++) {
+    for (i=0; i<22; i++) {
         if (polyString[*scroll+i] == '\0') {
             break;
         }
         buffer[i+1] = polyString[*scroll+i];
-    }*/
-    //strncpy(buffer+24, multString, 2);
+    }
+    strncpy(buffer+24, multString, 2);
     os_SetCursorPos(line, 0);
     os_PutStrFull(buffer);
     os_SetCursorPos(line, cursorDispPos);
-    //free(buffer);
     os_EnableCursor();
 }
 
 void dispString(char *string) {
-    char *buffer;
+    static char buffer[261];
     int offset;
     uint8_t atBottom;
     int i;
@@ -117,7 +116,6 @@ void dispString(char *string) {
 
     os_DisableCursor();
     
-    buffer = (char *)malloc(261*sizeof(char));
     buffer[260]='\0';
     offset = 0;
     atBottom = 0;
@@ -419,18 +417,18 @@ int main() {
     uint8_t i;
     uint8_t j;
 
-    char **mults;
-    char **buffer;
+    static char mults[MAX_POLY][3]; //max 2 digit multiplicity, one extra for sentinel
+    static char buffer[MAX_POLY][MAX_STRING+1]; //buffer for string input
 
-    struct term *terms;
-    struct poly *polynomials;
+    static struct term terms[MAX_TERMS];
+    static struct poly polynomials[MAX_POLY];
     uint8_t numTerms;
     uint8_t numPoly;
 
     struct term ONE;
-    struct term *expandedTerms;
+    static struct term expandedTerms[MAX_EXPANSION];
     uint8_t numExpandedTerms;
-    char *result;
+    static char result[MAX_RESULT+1];
     int scanPos;
     
     ONE.coefficient = 1;
@@ -439,11 +437,7 @@ int main() {
     os_ClrHome();
     os_EnableCursor();
     
-    mults = malloc(MAX_POLY*sizeof(char *));
-    buffer = malloc(MAX_POLY*sizeof(char *));
     for (i=0; i<MAX_POLY; i++) {
-        mults[i] = (char *)malloc(3*sizeof(char)); //max 2 digit multiplicity, one extra for sentinel
-        buffer[i] = (char *)malloc((MAX_STRING+1)*sizeof(char)); //buffer for string input
         mults[i][0] = '\0';
         buffer[i][0] = '\0';
     }
@@ -563,8 +557,6 @@ int main() {
         }
     }
 
-    terms = (struct term *)malloc(MAX_TERMS*sizeof(struct term));
-    polynomials = (struct poly *)malloc(MAX_POLY*sizeof(struct poly));
     numTerms = 0;
     numPoly = 0;
    
@@ -583,11 +575,9 @@ int main() {
         numPoly++;
     }
 
-    expandedTerms = (struct term *)malloc(MAX_EXPANSION*sizeof(struct term));
     numExpandedTerms = 0;
     expandExpr(polynomials, numPoly, expandedTerms, &numExpandedTerms, 0, 0, &ONE);
     
-    result = (char *)malloc(MAX_RESULT*sizeof(char));
     scanPos = 0;
     for (i=0; i<numExpandedTerms; i++) {
         if (expandedTerms[i].coefficient == 0) {

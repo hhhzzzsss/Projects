@@ -86,7 +86,7 @@ void drawLine(uint8_t line, char *polyString, char *multString, int8_t cursorPos
             cursorDispPos=25;
         }
     }
-    memset(lineBuffer, '-', 26*sizeof(char));
+    memset(lineBuffer, ' ', 26*sizeof(char));
     lineBuffer[26] = '\0';
     lineBuffer[0] = '(';
     lineBuffer[23] = ')';

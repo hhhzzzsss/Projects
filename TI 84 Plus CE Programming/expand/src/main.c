@@ -13,7 +13,7 @@
 #define MAX_TERMS 50
 #define MAX_STRING 50
 #define MAX_VARIABLES 10
-#define MAX_POLY 10
+#define MAX_POLY 5
 #define MAX_EXPANSION 200
 #define MAX_RESULT 2000
 
@@ -32,7 +32,7 @@ struct poly {
 
 const char numChars[] = {
     0,   0,   0,   0,   0,   0,   0,   0,   0,   0,
-    0,  '-',  0,   0,   0,   0,   0,  '-', '3', '6',
+   '+', '-',  0,   0,   0,   0,   0,  '-', '3', '6',
    '9',  0,   0,   0,   0,   0,  '2', '5', '8',  0,
     0,   0,   0,  '0', '1', '4', '7',  0,   0,   0,
     0,   0,   0,   0,   0,   0,   0,   0,   0,   0,
@@ -48,7 +48,7 @@ void delChar(char *ptr) {
     }
 }
 
-void moveCursorRight() {
+/*void moveCursorRight() {
     unsigned int row;
     unsigned int column;
     os_GetCursorPos(&row, &column);
@@ -60,16 +60,16 @@ void moveCursorLeft() {
     unsigned int column;
     os_GetCursorPos(&row, &column);
     os_SetCursorPos(row, column-1);
-}
+}*/
 
-void drawLine(uint8_t line, char *polyString, char *multString, uint8_t cursorPos, uint8_t *scroll) {
+void drawLine(uint8_t line, char *polyString, char *multString, int8_t cursorPos, uint8_t *scroll) {
     uint8_t cursorDispPos;
-    char *buffer;
+    char lineBuffer[27];
     uint8_t i;
     os_DisableCursor();
     if (cursorPos>=0) {
         cursorDispPos = cursorPos - *scroll + 1;
-        if (cursorDispPos==23) {
+        if (cursorDispPos>=23) {
             *scroll = cursorPos - 21;
             cursorDispPos = cursorPos - *scroll + 1;
         }
@@ -86,26 +86,30 @@ void drawLine(uint8_t line, char *polyString, char *multString, uint8_t cursorPo
             cursorDispPos=25;
         }
     }
-    buffer = (char *)malloc(27*sizeof(char));
-    memset(buffer, '-', 26*sizeof(char));
-    buffer[26] = '\0';
-    buffer[0] = '(';
-    buffer[23] = ')';
+    memset(lineBuffer, '-', 26*sizeof(char));
+    lineBuffer[26] = '\0';
+    lineBuffer[0] = '(';
+    lineBuffer[23] = ')';
     for (i=0; i<22; i++) {
         if (polyString[*scroll+i] == '\0') {
             break;
         }
-        buffer[i+1] = polyString[*scroll+i];
+        lineBuffer[i+1] = polyString[*scroll+i];
     }
-    strncpy(buffer+24, multString, 2);
+    for (i=0; i<2; i++) {
+        if (multString[i] == '\0') {
+            break;
+        }
+        lineBuffer[i+24] = multString[i];
+    }
     os_SetCursorPos(line, 0);
-    os_PutStrFull(buffer);
+    os_PutStrFull(lineBuffer);
     os_SetCursorPos(line, cursorDispPos);
     os_EnableCursor();
 }
 
 void dispString(char *string) {
-    static char buffer[261];
+    char textBlockBuffer[235];
     int offset;
     uint8_t atBottom;
     int i;
@@ -114,21 +118,22 @@ void dispString(char *string) {
     uint8_t lastKey;
     uint8_t changed;
 
+    os_ClrHome();
     os_DisableCursor();
     
-    buffer[260]='\0';
+    textBlockBuffer[234]='\0';
     offset = 0;
     atBottom = 0;
-    for (i=0; i<260; i++) {
+    for (i=0; i<234; i++) {
         char c = string[26*offset+i];
-        buffer[i] = c;
+        textBlockBuffer[i] = c;
         if (!c) {
             atBottom = 1;
             break;
         }
     }
     os_SetCursorPos(0,0);
-    os_PutStrFull(buffer);
+    os_PutStrFull(textBlockBuffer);
     
     key = 0;
     lastKey = 0;
@@ -151,21 +156,21 @@ void dispString(char *string) {
                 changed=1;
             }
         }
-        else if (key == sk_Power) {
+        else if (key == sk_Enter) {
             exit(1);
         }
 
         if (changed) {
-            for (i=0; i<260; i++) {
+            for (i=0; i<234; i++) {
                 char c = string[26*offset+i];
-                buffer[i] = c;
+                textBlockBuffer[i] = c;
                 if (!c) {
                     atBottom = 1;
                     break;
                 }
             }
             os_SetCursorPos(0,0);
-            os_PutStrFull(buffer);
+            os_PutStrFull(textBlockBuffer);
         }
     }
 }
@@ -462,17 +467,17 @@ int main() {
         else if (key == sk_Enter) { //switch between poly and multiplicity input
             if (cursorPos>=0) {
                 cursorPos = -2; //max 2 digit multiplicity
+                drawLine(lineNum, buffer[lineNum], mults[lineNum], cursorPos, &scroll);
             }
             else {
                 cursorPos = 0;
-                if (lineNum<MAX_POLY-1) {
-                    lineNum++;
-                }
+                drawLine(lineNum, buffer[lineNum], mults[lineNum], cursorPos, &scroll);
             }
             alpha = 0;
         }
         else if (key == sk_Clear) {
             if (cursorPos>=0) {
+                scroll = 0;
                 cursorPos=0;
                 buffer[lineNum][0] = '\0';
             }
@@ -491,42 +496,44 @@ int main() {
             }
             drawLine(lineNum, buffer[lineNum], mults[lineNum], cursorPos, &scroll);
         }
-        else if (key == sk_Graph) {
+        else if (key == sk_Yequ) {
             break;
         }
-        else if (key == sk_Power) {
+        else if (key == sk_Graph) {
             exit(1);
         }
         //arrow keys
         else if (key == sk_Up) {
             if (lineNum>0) {
+                scroll = 0;
                 cursorPos = 0;
                 drawLine(lineNum, buffer[lineNum], mults[lineNum], cursorPos, &scroll);
                 lineNum--;
-                os_SetCursorPos(lineNum, 1);
+                drawLine(lineNum, buffer[lineNum], mults[lineNum], cursorPos, &scroll);
                 alpha = 0;
             }
         }
         else if (key == sk_Down) {
             if (lineNum<MAX_POLY-1) {
+                scroll = 0;
                 cursorPos = 0;
                 drawLine(lineNum, buffer[lineNum], mults[lineNum], cursorPos, &scroll);
                 lineNum++;
-                os_SetCursorPos(lineNum, 1);
+                drawLine(lineNum, buffer[lineNum], mults[lineNum], cursorPos, &scroll);
                 alpha = 0;
             }
         }
         else if (key == sk_Left) {
             if (cursorPos > 0 || cursorPos == -1) {
                 cursorPos--;
-                moveCursorLeft();
+                drawLine(lineNum, buffer[lineNum], mults[lineNum], cursorPos, &scroll);
                 alpha = 0;
             }
         }
         else if (key == sk_Right) {
-            if (buffer[lineNum][cursorPos] && cursorPos < MAX_STRING && cursorPos != -1) {
+            if (buffer[lineNum][cursorPos] && cursorPos < MAX_STRING || mults[lineNum][0] && cursorPos == -2) {
                 cursorPos++;
-                moveCursorRight();
+                drawLine(lineNum, buffer[lineNum], mults[lineNum], cursorPos, &scroll);
                 alpha = 0;
             }
         }
@@ -546,11 +553,11 @@ int main() {
                 cursorPos++;
                 alpha = 0;
             }
-            else if (cursorPos<0 && cursorPos != -1) { //if not at max length and in multiplicity input
+            else if (cursorPos<0) { //if in multiplicity input
                 if (!mults[lineNum][cursorPos+2]) { //if at end of string, set next index to be sentinel
-                    mults[lineNum][cursorPos+3] = 1;
+                    mults[lineNum][cursorPos+3] = '\0';
                 }
-                mults[lineNum][cursorPos] = c;
+                mults[lineNum][cursorPos+2] = c;
                 cursorPos++;
             }
             drawLine(lineNum, buffer[lineNum], mults[lineNum], cursorPos, &scroll);
@@ -561,6 +568,9 @@ int main() {
     numPoly = 0;
    
     for (i=0; i<MAX_POLY; i++) {
+        if (buffer[i][0] == '\0') {
+            continue;
+        }
         polynomials[numPoly].start = terms+numTerms;
         numTerms += ( polynomials[numPoly].length = scanPoly(terms+numTerms, buffer[i], MAX_TERMS-numTerms) );
         if (mults[i][0]=='\0') {
@@ -594,6 +604,9 @@ int main() {
             if (expandedTerms[i].powers[j] != 1) {
                 scanPos += sprintf(result+scanPos, "%d", expandedTerms[i].powers[j]);
             }
+        }
+        if (i != numExpandedTerms-1 && expandedTerms[i+1].coefficient > 0)  {
+            scanPos += sprintf(result+scanPos, "+");
         }
         if (scanPos > MAX_RESULT-50) { //approaching buffer limit
             //printf("result too long\n");
